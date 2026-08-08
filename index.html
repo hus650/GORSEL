@@ -154,14 +154,14 @@
 </style>
 </head>
 <body>
- 
+
 <h1>🎨 Görsel Üret</h1>
- 
+
 <div class="tabs">
   <div class="tab active" id="tabNew" onclick="switchTab('new')">Yeni Görsel</div>
   <div class="tab" id="tabEdit" onclick="switchTab('edit')">Görsel Düzelt</div>
 </div>
- 
+
 <!-- YENİ GÖRSEL -->
 <div class="card panel active" id="panelNew">
   <textarea id="prompt" placeholder="Ne çizmemi istersin? Örn: gün batımında dağlar arasında bir göl"></textarea>
@@ -174,7 +174,7 @@
   </div>
   <button onclick="generate()">Görseli Oluştur</button>
 </div>
- 
+
 <!-- GÖRSEL DÜZELT -->
 <div class="card panel" id="panelEdit">
   <div class="upload-box" id="uploadBox" onclick="document.getElementById('fileInput').click()">
@@ -185,19 +185,20 @@
   <textarea id="editPrompt" placeholder="Görselde ne değiştirmemi/düzeltmemi istersin? Örn: arka planı beyaz yap, gökyüzünü daha mavi yap" style="margin-top:12px;"></textarea>
   <button onclick="editImage()">Görseli Düzelt</button>
 </div>
- 
+
 <div class="status" id="status"></div>
- 
+
 <div class="result">
   <img id="output" alt="Oluşturulan görsel">
   <button class="download" id="downloadBtn" onclick="downloadImage()">📥 İndir</button>
 </div>
- 
+
 <div class="hint">Ücretsiz — Pollinations.ai kullanıyor, API key gerekmez</div>
- 
+
 <script>
 let uploadedImageData = null;
- 
+let uploadedFile = null;
+
 function switchTab(tab) {
   document.getElementById('tabNew').classList.toggle('active', tab === 'new');
   document.getElementById('tabEdit').classList.toggle('active', tab === 'edit');
@@ -205,10 +206,11 @@ function switchTab(tab) {
   document.getElementById('panelEdit').classList.toggle('active', tab === 'edit');
   document.getElementById('status').textContent = '';
 }
- 
+
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
+  uploadedFile = file;
   const reader = new FileReader();
   reader.onload = function(e) {
     uploadedImageData = e.target.result;
@@ -219,19 +221,19 @@ function handleFile(event) {
   };
   reader.readAsDataURL(file);
 }
- 
+
 function setLoading(isLoading, msg) {
   document.getElementById('status').textContent = msg || '';
   document.querySelectorAll('button').forEach(b => b.disabled = isLoading);
 }
- 
+
 function showResult(url) {
   const img = document.getElementById('output');
   img.src = url;
   img.style.display = 'block';
   document.getElementById('downloadBtn').style.display = 'block';
 }
- 
+
 function generate() {
   const prompt = document.getElementById('prompt').value.trim();
   if (!prompt) {
@@ -241,11 +243,11 @@ function generate() {
   const [w, h] = document.getElementById('ratio').value.split('x');
   const seed = Math.floor(Math.random() * 1000000);
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&seed=${seed}&nologo=true`;
- 
+
   setLoading(true, 'Oluşturuluyor... (10-20 saniye sürebilir)');
   document.getElementById('output').style.display = 'none';
   document.getElementById('downloadBtn').style.display = 'none';
- 
+
   const testImg = new Image();
   testImg.onload = function() {
     showResult(url);
@@ -256,10 +258,10 @@ function generate() {
   };
   testImg.src = url;
 }
- 
+
 async function editImage() {
   const prompt = document.getElementById('editPrompt').value.trim();
-  if (!uploadedImageData) {
+  if (!uploadedFile) {
     document.getElementById('status').textContent = 'Önce bir görsel yükle 🙂';
     return;
   }
@@ -267,29 +269,52 @@ async function editImage() {
     document.getElementById('status').textContent = 'Ne değiştirmemi istediğini yaz 🙂';
     return;
   }
- 
+
   setLoading(true, 'Görsel işleniyor... biraz sürebilir');
   document.getElementById('output').style.display = 'none';
   document.getElementById('downloadBtn').style.display = 'none';
- 
+
   try {
-    const seed = Math.floor(Math.random() * 1000000);
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=kontext&image=${encodeURIComponent(uploadedImageData)}&seed=${seed}&nologo=true`;
- 
-    const testImg = new Image();
-    testImg.onload = function() {
-      showResult(url);
-      setLoading(false, 'Hazır ✅');
-    };
-    testImg.onerror = function() {
-      setLoading(false, 'Düzenleme başarısız oldu. Görsel çok büyük olabilir, daha küçük bir görselle dene.');
-    };
-    testImg.src = url;
+    const formData = new FormData();
+    formData.append('image', uploadedFile);
+    formData.append('prompt', prompt);
+    formData.append('model', 'kontext');
+
+    const response = await fetch('https://gen.pollinations.ai/v1/images/edits', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Sunucu hatası: ' + response.status);
+    }
+
+    // Yanıt ya doğrudan görsel (blob) ya da JSON içinde bir url/base64 olabilir.
+    const contentType = response.headers.get('content-type') || '';
+    let resultUrl;
+
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      const item = data.data && data.data[0];
+      if (item && item.url) {
+        resultUrl = item.url;
+      } else if (item && item.b64_json) {
+        resultUrl = 'data:image/png;base64,' + item.b64_json;
+      } else {
+        throw new Error('Beklenmeyen yanıt formatı');
+      }
+    } else {
+      const blob = await response.blob();
+      resultUrl = URL.createObjectURL(blob);
+    }
+
+    showResult(resultUrl);
+    setLoading(false, 'Hazır ✅');
   } catch (err) {
-    setLoading(false, 'Hata: ' + err.message);
+    setLoading(false, 'Düzenleme başarısız oldu: ' + err.message + '. Tekrar dene.');
   }
 }
- 
+
 function downloadImage() {
   const img = document.getElementById('output');
   const link = document.createElement('a');
@@ -299,7 +324,6 @@ function downloadImage() {
   link.click();
 }
 </script>
- 
+
 </body>
 </html>
- 
