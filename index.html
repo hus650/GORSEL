@@ -20,31 +20,8 @@
   h1 {
     font-size: 22px;
     font-weight: 700;
-    margin: 8px 0 16px;
+    margin: 8px 0 20px;
     text-align: center;
-  }
-  .tabs {
-    display: flex;
-    width: 100%;
-    max-width: 480px;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-  .tab {
-    flex: 1;
-    text-align: center;
-    padding: 10px;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    color: #c4b5fd;
-  }
-  .tab.active {
-    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-    color: white;
   }
   .card {
     width: 100%;
@@ -55,8 +32,6 @@
     padding: 18px;
     backdrop-filter: blur(10px);
   }
-  .panel { display: none; }
-  .panel.active { display: block; }
   textarea {
     width: 100%;
     min-height: 90px;
@@ -98,30 +73,6 @@
   }
   button:active { transform: scale(0.98); }
   button:disabled { opacity: 0.6; }
-  .upload-box {
-    width: 100%;
-    min-height: 120px;
-    border: 2px dashed rgba(255,255,255,0.25);
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #c4b5fd;
-    font-size: 14px;
-    text-align: center;
-    padding: 12px;
-    position: relative;
-    overflow: hidden;
-  }
-  .upload-box img {
-    max-width: 100%;
-    max-height: 200px;
-    border-radius: 8px;
-    margin-top: 8px;
-  }
-  input[type=file] { display: none; }
   .result {
     width: 100%;
     max-width: 480px;
@@ -154,16 +105,10 @@
 </style>
 </head>
 <body>
- 
+
 <h1>🎨 Görsel Üret</h1>
- 
-<div class="tabs">
-  <div class="tab active" id="tabNew" onclick="switchTab('new')">Yeni Görsel</div>
-  <div class="tab" id="tabEdit" onclick="switchTab('edit')">Görsel Düzelt</div>
-</div>
- 
-<!-- YENİ GÖRSEL -->
-<div class="card panel active" id="panelNew">
+
+<div class="card">
   <textarea id="prompt" placeholder="Ne çizmemi istersin? Örn: gün batımında dağlar arasında bir göl"></textarea>
   <div class="row">
     <select id="ratio">
@@ -172,168 +117,55 @@
       <option value="1536x1024">Yatay</option>
     </select>
   </div>
-  <button onclick="generate()">Görseli Oluştur</button>
+  <button id="genBtn" onclick="generate()">Görseli Oluştur</button>
+  <div class="status" id="status"></div>
 </div>
- 
-<!-- GÖRSEL DÜZELT -->
-<div class="card panel" id="panelEdit">
-  <input type="text" id="apiKey" placeholder="pk_ ile başlayan key'ini buraya yapıştır (bir kere)" style="width:100%; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.15); border-radius:10px; color:#fff; padding:10px; font-size:14px; margin-bottom:12px;">
-  <div class="upload-box" id="uploadBox" onclick="document.getElementById('fileInput').click()">
-    <span id="uploadText">📷 Görsel yüklemek için dokun</span>
-    <img id="previewImg" style="display:none;">
-  </div>
-  <input type="file" id="fileInput" accept="image/*" onchange="handleFile(event)">
-  <textarea id="editPrompt" placeholder="Görselde ne değiştirmemi/düzeltmemi istersin? Örn: arka planı beyaz yap, gökyüzünü daha mavi yap" style="margin-top:12px;"></textarea>
-  <button onclick="editImage()">Görseli Düzelt</button>
-</div>
- 
-<div class="status" id="status"></div>
- 
+
 <div class="result">
   <img id="output" alt="Oluşturulan görsel">
   <button class="download" id="downloadBtn" onclick="downloadImage()">📥 İndir</button>
 </div>
- 
+
 <div class="hint">Ücretsiz — Pollinations.ai kullanıyor, API key gerekmez</div>
- 
+
 <script>
-let uploadedImageData = null;
-let uploadedFile = null;
- 
-// Sayfa açılışında kayıtlı key varsa doldur
-window.addEventListener('DOMContentLoaded', function() {
-  const saved = localStorage.getItem('pollinations_key');
-  if (saved) {
-    document.getElementById('apiKey').value = saved;
-  }
-});
- 
-function switchTab(tab) {
-  document.getElementById('tabNew').classList.toggle('active', tab === 'new');
-  document.getElementById('tabEdit').classList.toggle('active', tab === 'edit');
-  document.getElementById('panelNew').classList.toggle('active', tab === 'new');
-  document.getElementById('panelEdit').classList.toggle('active', tab === 'edit');
-  document.getElementById('status').textContent = '';
-}
- 
-function handleFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  uploadedFile = file;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    uploadedImageData = e.target.result;
-    const img = document.getElementById('previewImg');
-    img.src = uploadedImageData;
-    img.style.display = 'block';
-    document.getElementById('uploadText').style.display = 'none';
-  };
-  reader.readAsDataURL(file);
-}
- 
-function setLoading(isLoading, msg) {
-  document.getElementById('status').textContent = msg || '';
-  document.querySelectorAll('button').forEach(b => b.disabled = isLoading);
-}
- 
-function showResult(url) {
-  const img = document.getElementById('output');
-  img.src = url;
-  img.style.display = 'block';
-  document.getElementById('downloadBtn').style.display = 'block';
-}
- 
 function generate() {
-  const prompt = document.getElementById('prompt').value.trim();
+  const promptEl = document.getElementById('prompt');
+  const prompt = promptEl.value.trim();
+  const status = document.getElementById('status');
+  const btn = document.getElementById('genBtn');
+  const img = document.getElementById('output');
+  const downloadBtn = document.getElementById('downloadBtn');
+
   if (!prompt) {
-    document.getElementById('status').textContent = 'Lütfen önce bir şeyler yaz 🙂';
+    status.textContent = 'Lütfen önce bir şeyler yaz 🙂';
     return;
   }
+
   const [w, h] = document.getElementById('ratio').value.split('x');
   const seed = Math.floor(Math.random() * 1000000);
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&seed=${seed}&nologo=true`;
- 
-  setLoading(true, 'Oluşturuluyor... (10-20 saniye sürebilir)');
-  document.getElementById('output').style.display = 'none';
-  document.getElementById('downloadBtn').style.display = 'none';
- 
+
+  btn.disabled = true;
+  status.textContent = 'Oluşturuluyor... (10-20 saniye sürebilir)';
+  img.style.display = 'none';
+  downloadBtn.style.display = 'none';
+
   const testImg = new Image();
   testImg.onload = function() {
-    showResult(url);
-    setLoading(false, 'Hazır ✅');
+    img.src = url;
+    img.style.display = 'block';
+    downloadBtn.style.display = 'block';
+    status.textContent = 'Hazır ✅';
+    btn.disabled = false;
   };
   testImg.onerror = function() {
-    setLoading(false, 'Bir hata oldu, tekrar dene.');
+    status.textContent = 'Bir hata oldu, tekrar dene.';
+    btn.disabled = false;
   };
   testImg.src = url;
 }
- 
-async function editImage() {
-  const prompt = document.getElementById('editPrompt').value.trim();
-  if (!uploadedFile) {
-    document.getElementById('status').textContent = 'Önce bir görsel yükle 🙂';
-    return;
-  }
-  if (!prompt) {
-    document.getElementById('status').textContent = 'Ne değiştirmemi istediğini yaz 🙂';
-    return;
-  }
- 
-  setLoading(true, 'Görsel işleniyor... biraz sürebilir');
-  document.getElementById('output').style.display = 'none';
-  document.getElementById('downloadBtn').style.display = 'none';
- 
-  const apiKey = document.getElementById('apiKey').value.trim();
-  if (apiKey) {
-    localStorage.setItem('pollinations_key', apiKey);
-  }
-  const savedKey = localStorage.getItem('pollinations_key') || apiKey;
- 
-  try {
-    const formData = new FormData();
-    formData.append('image', uploadedFile);
-    formData.append('prompt', prompt);
-    formData.append('model', 'kontext');
- 
-    const editUrl = savedKey
-      ? `https://gen.pollinations.ai/v1/images/edits?key=${encodeURIComponent(savedKey)}`
-      : 'https://gen.pollinations.ai/v1/images/edits';
- 
-    const response = await fetch(editUrl, {
-      method: 'POST',
-      body: formData
-    });
- 
-    if (!response.ok) {
-      throw new Error('Sunucu hatası: ' + response.status);
-    }
- 
-    // Yanıt ya doğrudan görsel (blob) ya da JSON içinde bir url/base64 olabilir.
-    const contentType = response.headers.get('content-type') || '';
-    let resultUrl;
- 
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      const item = data.data && data.data[0];
-      if (item && item.url) {
-        resultUrl = item.url;
-      } else if (item && item.b64_json) {
-        resultUrl = 'data:image/png;base64,' + item.b64_json;
-      } else {
-        throw new Error('Beklenmeyen yanıt formatı');
-      }
-    } else {
-      const blob = await response.blob();
-      resultUrl = URL.createObjectURL(blob);
-    }
- 
-    showResult(resultUrl);
-    setLoading(false, 'Hazır ✅');
-  } catch (err) {
-    setLoading(false, 'Düzenleme başarısız oldu: ' + err.message + '. Tekrar dene.');
-  }
-}
- 
+
 function downloadImage() {
   const img = document.getElementById('output');
   const link = document.createElement('a');
@@ -343,7 +175,6 @@ function downloadImage() {
   link.click();
 }
 </script>
- 
+
 </body>
 </html>
- 
